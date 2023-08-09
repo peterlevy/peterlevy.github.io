@@ -1,10 +1,8 @@
 ---
 layout: post
-title: You're up and running!
+title: Research debt and reproducibility in science
 ---
 
-Next you can update your site name, avatar and other options using the _config.yml file in the root of your repository (shown below).
-
-![_config.yml]({{ site.baseurl }}/images/config.png)
-
-The easiest way to make your first post is to edit this one. Go into /_posts/ and update the Hello World markdown file. For more instructions head over to the [Jekyll Now repository](https://github.com/barryclark/jekyll-now) on GitHub.
+This website is a work-in-progress with some thoughts on [research debt](https://distill.pub/2017/research-debt/) 
+and [reproducibility](https://www.mariushobbhahn.com/2020-03-22-case_for_rep_ML/)
+in science, particularly ecology.
