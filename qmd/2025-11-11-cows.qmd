@@ -9,6 +9,9 @@ bibliography: cows.bib
 editor:
   markdown:
     wrap: sentence
+format: 
+  html:
+    self-contained: true
 ---
 
 ```{r render, eval=FALSE, echo = FALSE}
@@ -29,7 +32,8 @@ library(ggforce)
 ```{r, echo = FALSE}
 GWP_CH4_CO2_100yr <- 25  # from IPCC AR4
 # dairy = 100, beef = 50-75
-e_cow <- set_units(75, kg / year)  # ch4 emitted by one cow per year
+# an additional 20% comes from manure
+e_cow <- set_units(75 * 1.2, kg / year)  # ch4 emitted by one cow per year
 ```
 
 ## Question:
@@ -55,7 +59,7 @@ compare the two.
 emissions from a single cow over the next 25 years (i.e. so as to meet the Net 
 Zero 2050 target for that single cow)?
 2. What area of land would need to be planted with trees to offset the methane 
-emissions from a single cow over the next 50 years?
+emissions from a single cow over the next 100 years?
 3. On a single farm with a fixed area, how long could grazing continue at a 
 reasonable stocking density before the area of the land needed for woodland 
 precludes grazing?
@@ -69,28 +73,37 @@ from cows and uptake by trees.
 
 
 ### Methane from cows
-One dairy cow emits about 100 kg of methane per year; for  for non-dairy cattle,
-the value is ~50-75 kg/yr - e.g. see [here](https://teagasc.ie/environment/climate-change-air-quality/methane/) 
+One dairy cow emits about 100 kg of methane per year from enteric fermentation; 
+for non-dairy cattle, the value is ~50-75 kg/yr - e.g. see 
+[here](https://teagasc.ie/environment/climate-change-air-quality/methane/) 
 or [here](https://naei.energysecurity.gov.uk/emission-factors)). 
-Here we use a value of `r e_cow` kg of CH4 as an intermediate.
+Methane emissions from manure adds around 20% to this.
+Here we use a value of 75 x 1.2 = `r e_cow` kg of CH4 as an average, 
+intermediate between beef and dairy.
 ```{r, echo = FALSE}
 e_cow <- e_cow * GWP_CH4_CO2_100yr  # co2 equivalent emitted by one cow per year
+n_cows <- 9.493333e6 # 9.5 million cattle population in 2023
 ```
 Methane has a global warming potential about `r GWP_CH4_CO2_100yr` times that of 
 CO₂ over a 100-year period, so that is equivalent to `r e_cow` kg of CO₂ 
-per year. 
+per year.
+The UK has a cattle population of around `r round(n_cows/1e6, 1)` million, so an
+annual emission of `r round(set_units(e_cow * n_cows, Tg/yr), 2)` Tg CO$_2$-e/yr.
+
 
 ### Carbon uptake by trees
 For a crude comparator, `r e_cow` kg of CO₂ is equivalent to a mature Sitka 
-spruce tree (dbh of 35 cm, age ~50 years [@Levy2004]). So we need to add one 
-mature tree, requiring 50 years to grow and occupying about 16 m$^2$ 
+spruce tree (dbh of 40 cm, age ~60 years [@Levy2004]). So we need to add one 
+mature tree, requiring 60 years to grow and occupying about 16 m$^2$ 
 (4 m spacing), for each cow, every year.
 
 To be properly quantitative so as to answer questions 1-3, we need to consider 
 the time course of tree growth in woodlands. Below, we show data for 
 sycamore/ash/birch from the [Woodland Carbon Code carbon calculation spreadsheet](https://www.woodlandcarboncode.org.uk/template-documents-and-tools-version-22).
-(version 2.4.1, April 2024). We use this as typical of UK commercial forestry in 
-answering the questions below, but other species could be chosen.
+(version 2.4.1, April 2024). We use this as typical of UK planting for 
+conservation projects in answering the questions below, but other species could 
+be chosen. Results for Sitka spruce, the main commercial species, are rather 
+similar, although the peak growth occurs later.
 
 ```{r, echo = FALSE, warning = FALSE, message = FALSE, fig.cap = "Figure 1: Carbon stock in sycamore/ash/birch woodland over time, with 2.5 m initial spacing, yield class 8, no thinning."} 
 fname <- here::here("data-raw", "WCC_CarbonCalculationSpreadsheet_Version2.4.1_April2024.xlsx")
@@ -125,12 +138,12 @@ p
 ```
 
 The annual change in carbon stock gives the annual flux of CO₂ into the woodland
-shown below. The dashed line shows the instantaneous annual flux in that year,
-while the solid line shows the mean flux over the period since planting. 
+shown below. The solid line shows the instantaneous annual flux in that year,
+while the dashed line shows the mean flux over the period since planting. 
 Given the time period of interest, we can use the latter to compare with the 
 constant annual emissions from cows.
 
-```{r, echo = FALSE, fig.cap = "Figure 2: Annual CO2 flux over time following planting sycamore/ash/birch woodland over time, with 2.5 m initial spacing, yield class 8, no thinning. Solid line shows the instantaneous uptake rate for each year; the dashed line shows the mean uptake rate since planting; the dotted line shows the mean uptake rate over time assuming planting is continuous, with an equal area planted each year."}
+```{r, echo = FALSE, fig.cap = "Figure 2: Annual CO$_2$ flux over time following planting sycamore/ash/birch woodland over time, with 2.5 m initial spacing, yield class 8, no thinning. Solid line shows the instantaneous uptake rate for each year; the dashed line shows the mean uptake rate since planting; the dotted line shows the mean uptake rate over time assuming planting is continuous, with an equal area planted each year."}
 # get annual flux by difference
 dt[, f_c := c(0, diff(S_c))]
 dt$f_c[1] <- dt$f_c[2] / 2 # make first value non-zero
@@ -139,16 +152,19 @@ dt[, f_c_mean := cumsum(f_c) / time]
 
 # find the weighted average flux from the first to the current time
 # this is the convolved rate, assuming a continuous affn rate
-dt[, w := set_units(1, yr) / time]
+dt[, w := time]
+# dt[, w := 1] # or unweighted
+# these give the same result with w = 1
 dt[, f_c_mean_w := cumsum(f_c_mean * w) / cumsum(w)]
-# dt[time <= 25, weighted.mean(f_c_mean, w)]
+# should give same answer for a given time period
+# dt[time <= set_units(10, yr), weighted.mean(f_c_mean, w)]
 
 p <- ggplot(drop_units(dt), aes(x = time, y = f_c)) +
   geom_line() +
   geom_line(aes(y = f_c_mean), linetype = "dashed") +
   geom_line(aes(y = f_c_mean_w), linetype = "dotted") +
   # geom_point() +
-  xlab("Time (years)") +
+  xlab("Time") +
   ylab("Carbon uptake rate (kg CO2/m^2/yr)") +
   theme_minimal()
 p
@@ -165,18 +181,17 @@ f_c_mean <- set_units(f_c_mean, kg / m^2 / year)
 required_affn <- e_cow / f_c_mean  # m2 of woodland needed to offset one cow's emissions per year
 required_affn_1a <- required_affn
 ```
-
 In this scenario, we consider the area of woodland planted in 2025 needed to 
 offset the methane emissions from a single cow over the following `r rotn_length`-year 
 period, up to 2050.
 The whole woodland grows to an age of `r rotn_length` years over this time.
 From Figure 1, the carbon sequestration in woodland over this period is
 `r round(S_c_25y, 2)` kg CO$_2$ / m$^2$, so a mean uptake rate of 
-`r round(f_c_mean, 2)` kg CO$_2$ / m$^2$ / year (From Figure 2). 
+`r round(f_c_mean, 2)` kg CO$_2$ / m$^2$ / year (dashed line in Figure 2). 
 The emissions from one cow is a constant `r e_cow` kg CO$_2$ / year.
 So, to offset the `r rotn_length`-year emissions from one cow, you would need to plant 
 `r round(required_affn, 0)` m$^2$ of new woodland (`r e_cow` kg CO₂ divided by 
-`r f_c_mean` kg CO2/m$^2$).
+`r round(f_c_mean, 2)` kg CO$_2$/m$^2$).
 
 In some ways, the area the cattle occupy does not matter - you just need to 
 plant `r round(required_affn, 0)` m$^2$ of new woodland per head of cattle. 
@@ -196,7 +211,6 @@ f_c_mean_w <- dt[time == rotn_length, f_c_mean_w]
 required_affn <- e_cow / f_c_mean_w  # m2 of woodland needed to offset one cow's emissions per year
 required_affn_1b <- required_affn
 ```
-
 In this scenario, we consider the total area of woodland that would need to be planted
 to offset the methane emissions from a single cow over the `r rotn_length`-year 
 period 2025-2050, if the woodland planting was on-going with an equal area 
@@ -209,7 +223,7 @@ period is
 The emissions from one cow is still a constant `r e_cow` kg CO$_2$ / year.
 So, to offset the `r rotn_length`-year emissions from one cow, you would need to plant 
 `r round(required_affn, 0)` m$^2$ of new woodland (`r e_cow` kg CO₂ divided by 
-`r f_c_mean_w` kg CO2/m$^2$).
+`r round(f_c_mean_w, 2)` kg CO$_2$/m$^2$).
 
 At a typical stocking density for conservation grazing is ~0.25 LU/ha = 
 1 cow per 40,000 m$^2$, the required `r round(required_affn, 0)` m$^2$ of 
@@ -220,13 +234,14 @@ At the more typical stocking density for conventional grazing of 1 LU/ha = 1 cow
 constitute 
 `r round(required_affn, 0) / 10000 * 100` % of the grazed area.
 
-### Q2a. What area of land would need to be planted with trees *in 2025* to offset the methane emissions from a single cow, over the next 50 years?
+### Q2a. What area of land would need to be planted with trees *in 2025* to offset the methane emissions from a single cow, over the next 100 years?
 Here, we repeat the same calculations but consider a longer time period where 
-the woodland is allowed to grow to 50 years old. 
-This makes a sizeable difference because tree growth is slow initially, 
-but much faster from ~15-50 years.
+the woodland is assumed to grow to 100 years old. 
+This makes a difference because tree growth is slow initially, 
+faster from ~15-30 years, and then tails off to zero. The exact shape of the 
+curve depends on the species.
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
-rotn_length <- 50
+rotn_length <- 100
 # f_c_mean <- mean(dt$S_c[1:rotn_length]) # gives same answer
 S_c_50y <- dt[time == rotn_length, S_c]
 f_c_mean <- dt[time == rotn_length, f_c_mean]
@@ -237,7 +252,7 @@ required_affn_2a <- required_affn
 ```
 
 In this scenario, we consider the area of woodland planted in 2025 needed to 
-offset the methane emissions from a single cow over the following 50-year 
+offset the methane emissions from a single cow over the following `r rotn_length`-year 
 period, up to 2075.
 The whole woodland grows to an age of `r rotn_length` years over this time.
 From Figure 1, the carbon sequestration in woodland over this period is
@@ -246,7 +261,7 @@ From Figure 1, the carbon sequestration in woodland over this period is
 The emissions from one cow is a constant `r e_cow` kg CO$_2$ / year.
 So, to offset the `r rotn_length`-year emissions from one cow, you would need to plant 
 `r round(required_affn, 0)` m$^2$ of new woodland (`r e_cow` kg CO₂ divided by 
-`r f_c_mean` kg CO2/m$^2$).
+`r round(f_c_mean, 2)` kg CO$_2$/m$^2$).
 
 To express the required afforestation as a fraction of the 
 land area used for grazing, we specify the same cattle stocking densities as before.
@@ -267,18 +282,19 @@ required_affn_2b <- required_affn
 ```
 
 In this scenario, we consider the total area of woodland that would need to be planted
-to offset the methane emissions from a single cow over the 50-year 
-period 2025-2075, if the woodland planting was on-going with an equal area 
+to offset the methane emissions from a single cow over the `r rotn_length`-year 
+period 2025-2125, if the woodland planting was on-going with an equal area 
 planted each year.
 Only 1/`r rotn_length`th of the woodland grows to an age of `r rotn_length` 
-years over this time, so the mean uptake rate is much lower - the dotted line in
+years over this time, and a bigger area is in the peak growth stage, so the mean 
+uptake rate is higher - the dotted line in
 Figure 2. The mean carbon sequestration across the mixed age woodland over this 
 period is 
 `r round(f_c_mean_w, 2)` kg CO$_2$ / m$^2$ / year. 
 The emissions from one cow is still a constant `r e_cow` kg CO$_2$ / year.
 So, to offset the `r rotn_length`-year emissions from one cow, you would need to plant 
 `r round(required_affn, 0)` m$^2$ of new woodland (`r e_cow` kg CO₂ divided by 
-`r f_c_mean_w` kg CO2/m$^2$).
+`r round(f_c_mean_w, 2)` kg CO$_2$/m$^2$).
 
 At a typical stocking density for conservation grazing is ~0.25 LU/ha = 
 1 cow per 40,000 m$^2$, the required `r round(required_affn, 0)` m$^2$ of 
@@ -294,15 +310,13 @@ To put these numbers in a national-scale context, we need to consider the UK
 population of cattle and the land area available.
 ```{r, echo = FALSE, warning = FALSE, message = FALSE}
 area_uk <- set_units(243000, km^2)
-n_cows <- 6e6 # 6 million adults in cattle population of 9.2 million
-
 current_planting_rate <- set_units(20660, ha)
 target_planting_rate <- set_units(30000, ha)
 current_planting_rate <- set_units(current_planting_rate, km^2)
 target_planting_rate <- set_units(target_planting_rate, km^2)
 ```
 
-To offset the UK cattle herd of ~6 million adults [Defra 2024](https://www.gov.uk/government/statistics/livestock-populations-in-the-united-kingdom/livestock-populations-in-the-united-kingdom-at-1-december--2), 
+To offset the UK cattle herd of ~9.5 million [Defra 2024](https://www.gov.uk/government/statistics/livestock-populations-in-the-united-kingdom/livestock-populations-in-the-united-kingdom-at-1-december--2), 
 half dairy and half beef, we can look at the national area of woodland planting 
 required, given the four scenarios. For comparison, the current UK annual new 
 planting rate is `r current_planting_rate` km$^2$/yr in 2023/4 [FR 2024](https://www.forestresearch.gov.uk/tools-and-resources/statistics/publications/forestry-statistics/forestry-statistics-2024/2024-1-woodland-area-and-planting/).
@@ -323,17 +337,17 @@ the current planting rate, and would give a total area equivalent to
 `r round(set_units(required_affn_1b * n_cows, km^2) / area_uk * 100, 0)` %
 of the total UK land area.
 
-2a. If we allow ourselves 50 years, we would need to plant
+2a. If we consider a `r rotn_length`-year period for woodland growth, we would need to plant
 `r round(set_units(required_affn_2a * n_cows, km^2), 0)` km$^2$ up-front in 
 2025/6. This is `r round(required_affn_2a * n_cows / current_planting_rate, 0)` times 
 the current planting rate, and equivalent to 
 `r round(set_units(required_affn_2a * n_cows, km^2) / area_uk * 100, 0)` %
 of the total UK land area.
 
-2b. With on-going annual planting over 50 years, we would need to plant
-`r round(set_units(required_affn_2b * n_cows / 50, km^2), 0)` km$^2$ each year 
+2b. With on-going annual planting over `r rotn_length` years, we would need to plant
+`r round(set_units(required_affn_2b * n_cows / rotn_length, km^2), 0)` km$^2$ each year 
 until 2075.
-This is `r round(required_affn_2b * n_cows / 50 / current_planting_rate, 0)` times 
+This is `r round(required_affn_2b * n_cows / rotn_length / current_planting_rate, 2)` times 
 the current planting rate, and would give a total area equivalent to 
 `r round(set_units(required_affn_2b * n_cows, km^2) / area_uk * 100, 0)` %
 of the total UK land area.
@@ -342,10 +356,54 @@ of the total UK land area.
 Less arbitrarily, we could assume that both the grazing and afforestation take 
 place within the same fixed area. In this case, we start with 40000 m$^2$ of 
 grassland per cow, and convert `r round(required_affn_2b, 0)` m$^2$ to woodland 
-each year. In this scenario, 
+each year, assuming option 2b of an intended `r rotn_length`-year time horizon. In this scenario, 
 grassland is gradually displaced by woodland over time, so the cattle stocking 
 density increases until the whole area is covered by woodland after 
 `r round(40000 / required_affn_2b, 0)` years.
+
+### Conclusions
+Comparing methane emissions from cows and CO$_2$ uptake by trees is not straightforward but a few points are clear.
+
+- Carbon sequestration from planted woodland is transient (it occurs over a few decades and then declines to zero), whilst methane emissions per cow are constant.
+- Because of this, in the long term we need to keep continually planting new woodland to offset constant emissions.
+- To compare like-with-like, we need to specify a time period and a tree planting schedule (e.g. all-at-once or continuous).
+- To offset emissions from the current UK cattle herd over the next 25 years, in time to meet the Net Zero 2050 target, we need to plant an additional 
+`r round(set_units(required_affn_1b * n_cows, km^2) / area_uk * 100, 0)` % of 
+the total UK land area, requiring 
+`r round(required_affn_1b * n_cows / 25 / current_planting_rate, 0)`
+times the current planting rate for 25 years (option 1b). Planting the required area up-front in 2025/26 (`r round(set_units(required_affn_1a * n_cows, km^2), 0)` km$^2$, 
+option 1a) is not practically feasible. Considering on-going annual planting 
+over 100 years makes this feasible within the current planting rate, but delays 
+reaching a net zero balance until 2125.
+
+In general, the uptake capacity of woodland planting on the scale feasible in 
+the UK is small compared to the size of the emissions from the UK cattle population.
+At the current planting rate, we are sequestering 
+`r round(f_c_mean_w * current_planting_rate / (e_cow * n_cows) * 100, 3)` %
+of the emissions from the UK cattle population
+(`r round(set_units(f_c_mean_w * current_planting_rate, Tg/yr), 4)` Tg CO$_2$/yr, 
+compared with emissions from the UK cattle population of
+`r round(set_units(e_cow * n_cows, Tg/yr), 2)` Tg CO$_2$-e/yr).
+
+<!-- As an independent check on these values, the UK GHG [inventory](https://www.gov.uk/government/statistics/final-uk-greenhouse-gas-emissions-statistics-1990-to-2023)
+reports methane emissions from the UK cattle population as
+```{r, eval = FALSE}
+e_cow_inv <- set_units(21.2, Mt/yr)
+e_cow_inv <- set_units(e_cow_inv, Tg/yr)
+set_units(e_cow_inv / 1875, kg/yr)
+set_units(e_cow_inv / n_cows, kg/yr)
+round(set_units(e_cow * n_cows, Tg/yr), 2)
+```
+The UK GHG inventory does not report the uptake by woodland planted in a 
+specific year, but the 10-year mean for uptake by all woodland planted in the 
+previous 20 years is
+```{r, eval = FALSE}
+f_c <- set_units(0.2, Mt/yr)
+f_c <- set_units(f_c, Tg/yr)
+f_c / current_planting_rate
+set_units(f_c / current_planting_rate, kg/m^2/yr)
+round(set_units(f_c / current_planting_rate, kg/m^2/yr), 2)
+``` -->
 
 <!-- 1. Estimate the rotation length on which any harvesting might occur, and use the
 mean carbon stock over that period. You can then calculate the area of woodland
